@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <title>Battlezone Recreation</title>
+   <style>
+      body {
+         margin: 0;
+         overflow: hidden;
+         background: black;
+      }
+
+      canvas {
+         display: block;
+      }
+   </style>
+</head>
+
+<body>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+   <script>
+      // Scene setup 
+      const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000); const renderer = new THREE.WebGLRenderer(); renderer.setSize(window.innerWidth, window.innerHeight); document.body.appendChild(renderer.domElement);
+      // Green wireframe material 
+      const wireframeMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+      // Player tank (simplified as a wireframe box) 
+      const playerGeometry = new THREE.BoxGeometry(1, 0.5, 2); const playerEdges = new THREE.EdgesGeometry(playerGeometry); const playerTank = new THREE.LineSegments(playerEdges, wireframeMaterial); playerTank.position.y = 0.25;
+      // Raise slightly off ground 
+      scene.add(playerTank);
+      // Enemy tank (similar wireframe box, positioned ahead) 
+      const enemyGeometry = new THREE.BoxGeometry(1, 0.5, 2); const enemyEdges = new THREE.EdgesGeometry(enemyGeometry); const enemyTank = new THREE.LineSegments(enemyEdges, wireframeMaterial); enemyTank.position.set(0, 0.25, -10);
+      // Place in front of player 
+      scene.add(enemyTank);
+      // Ground plane (wireframe grid) 
+      const grid = new THREE.GridHelper(50, 50, 0x00ff00, 0x00ff00); scene.add(grid);
+      // Camera position (first-person-esque) 
+      camera.position.set(0, 2, 5); camera.lookAt(playerTank.position);
+      // Movement controls 
+      let moveForward = false, moveBackward = false, turnLeft = false, turnRight = false; const speed = 0.1, turnSpeed = 0.03; document.addEventListener('keydown', (event) => {
+         switch (event.key) {
+            case 'w': moveForward = true; break; case 's': moveBackward = true; break; case 'a': turnLeft = true; break; case 'd': turnRight = true; break; case ' ': shoot(); break;
+            // Spacebar to shoot 
+         }
+      }); document.addEventListener('keyup', (event) => { switch (event.key) { case 'w': moveForward = false; break; case 's': moveBackward = false; break; case 'a': turnLeft = false; break; case 'd': turnRight = false; break; } });
+      // Shooting mechanic 
+      const bullets = []; function shoot() { const bulletGeometry = new THREE.SphereGeometry(0.1, 4, 4); const bulletEdges = new THREE.EdgesGeometry(bulletGeometry); const bullet = new THREE.LineSegments(bulletEdges, wireframeMaterial); bullet.position.copy(playerTank.position); bullet.rotation.copy(playerTank.rotation); scene.add(bullet); bullets.push({ mesh: bullet, velocity: new THREE.Vector3(0, 0, -0.5).applyQuaternion(playerTank.quaternion) }); }
+      // Simple enemy AI (moves slowly toward player) 
+      function updateEnemy() { const direction = new THREE.Vector3().subVectors(playerTank.position, enemyTank.position).normalize(); enemyTank.position.add(direction.multiplyScalar(0.02)); enemyTank.lookAt(playerTank.position); }
+      // Collision detection 
+      function checkCollisions() {
+         bullets.forEach((bullet, index) => {
+            const distance = bullet.mesh.position.distanceTo(enemyTank.position); if (distance < 1) {
+               scene.remove(enemyTank);
+               // "Destroy" enemy 
+               scene.remove(bullet.mesh); bullets.splice(index, 1);
+            }
+         });
+      }
+      // Animation loop 
+      function animate() {
+         requestAnimationFrame(animate);
+         // Player movement 
+         if (moveForward) playerTank.translateZ(-speed); if (moveBackward) playerTank.translateZ(speed); if (turnLeft) playerTank.rotation.y += turnSpeed; if (turnRight) playerTank.rotation.y -= turnSpeed;
+         // Update camera to follow player 
+         camera.position.set(playerTank.position.x - Math.sin(playerTank.rotation.y) * 5, playerTank.position.y + 2, playerTank.position.z - Math.cos(playerTank.rotation.y) * 5); camera.lookAt(playerTank.position);
+         // Update bullets 
+         bullets.forEach((bullet, index) => {
+            bullet.mesh.position.add(bullet.velocity); if (bullet.mesh.position.z < -50) {
+               // Remove if too far 
+               scene.remove(bullet.mesh); bullets.splice(index, 1);
+            }
+         }); updateEnemy(); checkCollisions(); renderer.render(scene, camera);
+      } animate();
+      // Handle window resize 
+      window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+
+
+   </script>
+</body>
+
+</html>​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​
