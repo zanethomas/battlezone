@@ -13,22 +13,71 @@
       canvas {
          display: block;
       }
+
+      #splashScreen {
+         position: absolute;
+         top: 50%;
+         left: 50%;
+         transform: translate(-50%, -50%);
+         text-align: center;
+         color: #00ff00;
+         font-family: monospace;
+         font-size: 1.2em;
+         background: rgba(0, 0, 0, 0.8);
+         padding: 2em;
+         border: 2px solid #00ff00;
+      }
+
+      #startButton {
+         background: transparent;
+         color: #00ff00;
+         border: 2px solid #00ff00;
+         padding: 10px 20px;
+         font-family: monospace;
+         font-size: 1.2em;
+         cursor: pointer;
+         margin-top: 20px;
+      }
+
+      #startButton:hover {
+         background: #00ff00;
+         color: black;
+      }
    </style>
 </head>
 
 <body>
+   <div id="splashScreen">
+      <h1>BATTLEZONE</h1>
+      <p>Controls:</p>
+      <p>W - Move Forward</p>
+      <p>S - Move Backward</p>
+      <p>A - Turn Left</p>
+      <p>D - Turn Right</p>
+      <p>SPACE - Shoot</p>
+      <button id="startButton">START GAME</button>
+   </div>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
    <script>
+      // Game state
+      let gameStarted = false;
+
       // Scene setup 
-      const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000); const renderer = new THREE.WebGLRenderer(); renderer.setSize(window.innerWidth, window.innerHeight); document.body.appendChild(renderer.domElement);
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer(); renderer.setSize(window.innerWidth, window.innerHeight); document.body.appendChild(renderer.domElement);
       // Green wireframe material 
       const wireframeMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
       // Player tank (simplified as a wireframe box) 
-      const playerGeometry = new THREE.BoxGeometry(1, 0.5, 2); const playerEdges = new THREE.EdgesGeometry(playerGeometry); const playerTank = new THREE.LineSegments(playerEdges, wireframeMaterial); playerTank.position.y = 0.25;
+      const playerGeometry = new THREE.BoxGeometry(1, 0.5, 2);
+      const playerEdges = new THREE.EdgesGeometry(playerGeometry);
+      const playerTank = new THREE.LineSegments(playerEdges, wireframeMaterial); playerTank.position.y = 0.25;
       // Raise slightly off ground 
       scene.add(playerTank);
       // Enemy tank (similar wireframe box, positioned ahead) 
-      const enemyGeometry = new THREE.BoxGeometry(1, 0.5, 2); const enemyEdges = new THREE.EdgesGeometry(enemyGeometry); const enemyTank = new THREE.LineSegments(enemyEdges, wireframeMaterial); enemyTank.position.set(0, 0.25, -10);
+      const enemyGeometry = new THREE.BoxGeometry(1, 0.5, 2);
+      const enemyEdges = new THREE.EdgesGeometry(enemyGeometry);
+      let enemyTank = new THREE.LineSegments(enemyEdges, wireframeMaterial); enemyTank.position.set(0, 0.25, -10);
       // Place in front of player 
       scene.add(enemyTank);
       // Ground plane (wireframe grid) 
@@ -36,45 +85,169 @@
       // Camera position (first-person-esque) 
       camera.position.set(0, 2, 5); camera.lookAt(playerTank.position);
       // Movement controls 
-      let moveForward = false, moveBackward = false, turnLeft = false, turnRight = false; const speed = 0.1, turnSpeed = 0.03; document.addEventListener('keydown', (event) => {
+      let moveForward = false, moveBackward = false, turnLeft = false, turnRight = false; const speed = 0.1, turnSpeed = 0.03;
+
+      // Start game function
+      function startGame() {
+         gameStarted = true;
+         document.getElementById('splashScreen').style.display = 'none';
+         animate();
+      }
+
+      // Add event listener for start button
+      document.getElementById('startButton').addEventListener('click', startGame);
+
+      // Update camera to follow player 
+      function updateCamera() {
+         const distance = 5;
+         const height = 2;
+         
+         // Calculate camera position behind player
+         const cameraOffset = new THREE.Vector3(
+             -Math.sin(playerTank.rotation.y) * distance,
+             height,
+             -Math.cos(playerTank.rotation.y) * distance
+         );
+         
+         camera.position.copy(playerTank.position).add(cameraOffset);
+         camera.lookAt(
+             playerTank.position.x,
+             playerTank.position.y,
+             playerTank.position.z
+         );
+      }
+
+      // Update animate function to use new camera function
+      function animate() {
+         if (!gameStarted) return;
+         
+         requestAnimationFrame(animate);
+         
+         // Player movement 
+         if (moveForward) playerTank.translateZ(-speed); 
+         if (moveBackward) playerTank.translateZ(speed); 
+         if (turnLeft) playerTank.rotation.y += turnSpeed; 
+         if (turnRight) playerTank.rotation.y -= turnSpeed;
+         
+         updateCamera();
+         
+         // Update game objects
+         bullets.forEach(bullet => {
+             if (bullet.mesh) bullet.mesh.position.add(bullet.velocity);
+         });
+         
+         updateEnemy();
+         checkCollisions();
+         renderer.render(scene, camera);
+      }
+
+      // Modify key event listeners to only work when game is started
+      document.addEventListener('keydown', (event) => {
+         if (!gameStarted) return;
          switch (event.key) {
-            case 'w': moveForward = true; break; case 's': moveBackward = true; break; case 'a': turnLeft = true; break; case 'd': turnRight = true; break; case ' ': shoot(); break;
-            // Spacebar to shoot 
+            case 'w': moveForward = true; break; 
+            case 's': moveBackward = true; break; 
+            case 'a': turnLeft = true; break; 
+            case 'd': turnRight = true; break; 
+            case ' ': shoot(); break;
          }
-      }); document.addEventListener('keyup', (event) => { switch (event.key) { case 'w': moveForward = false; break; case 's': moveBackward = false; break; case 'a': turnLeft = false; break; case 'd': turnRight = false; break; } });
+      });
+
+      document.addEventListener('keyup', (event) => {
+         if (!gameStarted) return;
+         switch (event.key) {
+            case 'w': moveForward = false; break; 
+            case 's': moveBackward = false; break; 
+            case 'a': turnLeft = false; break; 
+            case 'd': turnRight = false; break;
+         }
+      });
+
       // Shooting mechanic 
-      const bullets = []; function shoot() { const bulletGeometry = new THREE.SphereGeometry(0.1, 4, 4); const bulletEdges = new THREE.EdgesGeometry(bulletGeometry); const bullet = new THREE.LineSegments(bulletEdges, wireframeMaterial); bullet.position.copy(playerTank.position); bullet.rotation.copy(playerTank.rotation); scene.add(bullet); bullets.push({ mesh: bullet, velocity: new THREE.Vector3(0, 0, -0.5).applyQuaternion(playerTank.quaternion) }); }
-      // Simple enemy AI (moves slowly toward player) 
-      function updateEnemy() { const direction = new THREE.Vector3().subVectors(playerTank.position, enemyTank.position).normalize(); enemyTank.position.add(direction.multiplyScalar(0.02)); enemyTank.lookAt(playerTank.position); }
-      // Collision detection 
-      function checkCollisions() {
-         bullets.forEach((bullet, index) => {
-            const distance = bullet.mesh.position.distanceTo(enemyTank.position); if (distance < 1) {
-               scene.remove(enemyTank);
-               // "Destroy" enemy 
-               scene.remove(bullet.mesh); bullets.splice(index, 1);
-            }
+      const bullets = [];
+      function shoot() {
+         const bulletGeometry = new THREE.SphereGeometry(0.1, 4, 4);
+         const bulletEdges = new THREE.EdgesGeometry(bulletGeometry);
+         const bullet = new THREE.LineSegments(bulletEdges, wireframeMaterial);
+         
+         // Position bullet at the front of the tank
+         const offset = new THREE.Vector3(0, 0, -1);
+         offset.applyQuaternion(playerTank.quaternion);
+         bullet.position.copy(playerTank.position).add(offset);
+         
+         scene.add(bullet);
+         
+         // Calculate forward direction
+         const direction = new THREE.Vector3(0, 0, -1);
+         direction.applyQuaternion(playerTank.quaternion);
+         
+         bullets.push({
+             mesh: bullet,
+             velocity: direction.multiplyScalar(1.0)  // Increased speed for better gameplay
          });
       }
-      // Animation loop 
-      function animate() {
-         requestAnimationFrame(animate);
-         // Player movement 
-         if (moveForward) playerTank.translateZ(-speed); if (moveBackward) playerTank.translateZ(speed); if (turnLeft) playerTank.rotation.y += turnSpeed; if (turnRight) playerTank.rotation.y -= turnSpeed;
-         // Update camera to follow player 
-         camera.position.set(playerTank.position.x - Math.sin(playerTank.rotation.y) * 5, playerTank.position.y + 2, playerTank.position.z - Math.cos(playerTank.rotation.y) * 5); camera.lookAt(playerTank.position);
-         // Update bullets 
-         bullets.forEach((bullet, index) => {
-            bullet.mesh.position.add(bullet.velocity); if (bullet.mesh.position.z < -50) {
-               // Remove if too far 
-               scene.remove(bullet.mesh); bullets.splice(index, 1);
+
+      // Simple enemy AI (moves slowly toward player) 
+      function updateEnemy() { 
+         if (!enemyTank) return; // Check if enemy still exists
+         
+         const direction = new THREE.Vector3();
+         direction.subVectors(playerTank.position, enemyTank.position);
+         direction.y = 0; // Keep enemy tank level with ground
+         direction.normalize();
+         
+         enemyTank.position.add(direction.multiplyScalar(0.05));
+         
+         // Smoothly rotate enemy to face player
+         const targetRotation = Math.atan2(direction.x, direction.z);
+         enemyTank.rotation.y = targetRotation;
+      }
+
+      // Collision detection 
+      function checkCollisions() {
+         for (let i = bullets.length - 1; i >= 0; i--) {
+            const bullet = bullets[i];
+            if (!bullet.mesh) continue;
+            
+            // Remove bullets that go too far
+            if (bullet.mesh.position.distanceTo(playerTank.position) > 50) {
+               scene.remove(bullet.mesh);
+               bullets.splice(i, 1);
+               continue;
             }
-         }); updateEnemy(); checkCollisions(); renderer.render(scene, camera);
-      } animate();
+            
+            // Check collision with enemy
+            if (enemyTank && bullet.mesh.position.distanceTo(enemyTank.position) < 1) {
+               scene.remove(enemyTank);
+               scene.remove(bullet.mesh);
+               bullets.splice(i, 1);
+               enemyTank = null; // Mark enemy as destroyed
+               
+               // Optional: Respawn enemy after delay
+               setTimeout(() => {
+                  if (!enemyTank) {
+                     enemyTank = new THREE.LineSegments(enemyEdges, wireframeMaterial);
+                     enemyTank.position.set(
+                        playerTank.position.x + (Math.random() - 0.5) * 20,
+                        0.25,
+                        playerTank.position.z - 20
+                     );
+                     scene.add(enemyTank);
+                  }
+               }, 3000);
+            }
+         }
+      }
+
+      // Initialize scene but don't start animation
+      renderer.render(scene, camera);
+
       // Handle window resize 
-      window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
-
-
+         window.addEventListener('resize', () => { 
+            camera.aspect = window.innerWidth / window.innerHeight; 
+            camera.updateProjectionMatrix(); 
+            renderer.setSize(window.innerWidth, window.innerHeight); 
+         });
    </script>
 </body>
 
